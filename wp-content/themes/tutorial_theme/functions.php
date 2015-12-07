@@ -8,6 +8,8 @@
  */
 define('THEME_NAME', 'tutorial_theme');
 
+add_filter('deprecated_constructor_trigger_error', '__return_false');
+
 function remove_menus () {
     global $menu;
     $restricted = array(

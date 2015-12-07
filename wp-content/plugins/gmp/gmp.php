@@ -9,12 +9,46 @@ Author URI: http://example.com
 */
 register_activation_hook(__FILE__,'gmp_install');
 function gmp_install() {
-    global $wp_version;
+    global $wp_version, $wpdb;
     if(version_compare($wp_version, "2.9", "<")) {
         deactivate_plugins(basename(__FILE__)); // Deactivate our plugin
         wp_die("This plugin requires WordPress version 2.9 or higher.");
     }
-    add_option('gmp_display_mode', 'Christmas Tree');
+
+    //set the table structure version
+    $gmp_db_version = "1.0";
+
+    //define the custom table name
+    $table_name = $wpdb->prefix . "gmp_ data";
+
+    //verify the table doesn’t already exist
+    if($wpdb->get_var("SHOW TABLES LIKE '$table_name'") != $table_name) {
+
+        //build our query to create our new table
+        $sql = "CREATE TABLE " . $table_name . " (
+            id mediumint(9) NOT NULL AUTO_INCREMENT,
+            time bigint(11) DEFAULT ‘0’ NOT NULL,
+            name tinytext NOT NULL,
+            text text NOT NULL,
+            url VARCHAR(55) NOT NULL,
+            UNIQUE KEY id (id)
+        );";
+        require_once( ABSPATH . 'wp-admin/includes/upgrade.php' );
+
+        //execute the query creating our table
+        dbDelta( $sql );
+
+        //save the table structure version number
+        add_option("gmp_db_version", $gmp_db_version);
+    }
+
+    $installed_ver = get_option( "gmp_ db_version" );
+    if( $installed_ver != $gmp_db_version ) {
+        //update database table here
+
+        //update table version
+        update_option( "gmp_db_version", $gmp_db_version );
+    }
 }
 
 register_deactivation_hook(__FILE__,'gmp_uninstall');
@@ -78,4 +112,70 @@ function gmp_settings_page() {
 
 function gmp_settings_template() {
     echo "Hello Template!";
+}
+
+add_action( "widgets_init", "gmp_register_widgets" );
+function gmp_register_widgets() {
+    register_widget( "gmp_widget" );
+}
+
+class gmp_widget extends WP_Widget {
+
+    function gmp_widget() {
+            $widget_ops = array('classname' => 'gmp_widget',
+                'description' => __('Example widget that displays a user\'s bio.','gmp-plugin') );
+            $this->WP_Widget('gmp_widget_bio',
+                __('Bio Widget','gmp-plugin'), $widget_ops);
+    }
+    function form($instance) {
+        $defaults = array( 'title' => __('My Bio','gmp-plugin'), 'name' => '', 'bio' => '' );
+        $instance = wp_parse_args( (array) $instance, $defaults );
+        $title = strip_tags($instance['title']);
+        $name = strip_tags($instance['name']);
+        $bio = strip_tags($instance['bio']);
+        ?>
+                <p><?php _e('Title', 'gmp-plugin') ?>: <input class="widefat"
+                                                             name="<?php echo $this->get_field_name('title'); ?>"
+                                                             type="text"
+                                                             value="<?php echo esc_attr($title); ?>" /></p>
+                <p><?php _e('Name', 'gmp-plugin') ?>: <input class="widefat"
+                                                            name="<?php echo $this->get_field_name('name');?>"
+                                                            type="text"
+                                                            value="<?php echo esc_attr($name); ?>" /></p>
+                <p><?php _e('Bio', 'gmp-plugin') ?>: <textarea class="widefat"
+                                                      name="<?php echo $this->get_field_name('bio'); ?>"
+            ><?php echo esc_attr($bio); ?></textarea></p>
+        <?php
+    }
+    function update($new_instance, $old_instance) {
+        $instance = $old_instance;
+        $instance['title'] = strip_tags($new_instance['title']);
+        $instance['name'] = strip_tags($new_instance['name']);
+        $instance['bio'] = strip_tags($new_instance['bio']);
+        return $instance;
+    }
+    function widget($args, $instance) {
+        extract($args);
+        echo $before_widget;
+        $title = apply_filters('widget_title', $instance['title'] );
+        $name = empty($instance['name']) ? '&nbsp;' : apply_filters('widget_name', $instance['name']);
+        $bio = empty($instance['bio']) ? '&nbsp;' :
+        apply_filters('widget_bio', $instance['bio']);
+        if (!empty( $title ) ) { echo $before_title . $title . $after_title; };
+        echo '<p>' .__('Name', 'gmp-plugin') .':' . $name . '</p>';
+        echo '<p>' .__('Bio', 'gmp-plugin') .':' . $bio . '</p>';
+        echo $after_widget;
+    }
+}
+
+add_action('wp_dashboard_setup', 'gmp_add_dashboard_widget' );
+// call function to create our dashboard widget
+function gmp_add_dashboard_widget() {
+    wp_add_dashboard_widget('gmp_dashboard_widget',
+        __('GMP Dashboard Widget','gmp-plugin'), 'gmp_create_dashboard_widget');
+}
+
+// function to display our dashboard widget content
+function gmp_create_dashboard_widget() {
+    _e('Hello World! This is my Dashboard Widget', 'gmp-plugin');
 }
